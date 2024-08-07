@@ -40,6 +40,7 @@ from .protocol.grpc.server import GRPCServer
 from .protocol.model_repository_extension import ModelRepositoryExtension
 from .protocol.rest.server import UvicornServer
 from .utils import utils
+from .api import creds_utils
 from kserve.errors import NoModelReady
 
 parser = argparse.ArgumentParser(
@@ -113,6 +114,27 @@ parser.add_argument(
     help="The asgi access logging format. It allows to override only the `uvicorn.access`'s format configuration "
     "with a richer set of fields",
 )
+parser.add_argument(
+    "--secure_grpc_server",
+    default=False,
+    type=bool,
+    choices=[True, False],
+    help="Enable gRPC server authentication using SSL for the model server.")
+parser.add_argument(
+    "--ssl_server_key",
+    default=None,
+    type=str,
+    help="File path for SSL server key used for gRPC server authentication.")
+parser.add_argument(
+    "--ssl_server_cert",
+    default=None,
+    type=str,
+    help="File path for SSL server key used for gRPC server authentication.")
+parser.add_argument(
+    "--ssl_ca_cert",
+    default=None,
+    type=str,
+    help="File path for SSL server key used for gRPC server authentication.")
 
 # Model arguments: The arguments are passed to the kserve.Model object
 parser.add_argument(
@@ -191,6 +213,10 @@ class ModelServer:
         enable_docs_url: bool = args.enable_docs_url,
         enable_latency_logging: bool = args.enable_latency_logging,
         access_log_format: str = args.access_log_format,
+        secure_grpc_server: bool = args.secure_grpc_server,
+        ssl_server_key: Union[str, bytes] = args.ssl_server_key,
+        ssl_server_cert: Union[str, bytes] = args.ssl_server_cert,
+        ssl_ca_cert: Union[str, bytes] = args.ssl_ca_cert
     ):
         """KServe ModelServer Constructor
 
@@ -210,6 +236,10 @@ class ModelServer:
                                ASGI specs that don't describe how access logging should be implemented in detail
                                (please refer to this Uvicorn
                                [github issue](https://github.com/encode/uvicorn/issues/527) for more info).
+            secure_grpc_server: Whether to enable secure grpc server. Default: ``False``.
+            ssl_server_key: File path or contents to server key for secure grpc server credentials. Default: ``None``.
+            ssl_server_cert: File path or contents to server cert for secure grpc server credentials. Default: ``None``.
+            ssl_ca_cert: File path or contents to CA cert for secure grpc server credentials. Default: ``None``.
         """
         self.registered_models = (
             ModelRepository() if registered_models is None else registered_models
@@ -228,13 +258,34 @@ class ModelServer:
         )
         self._grpc_server = None
         self._rest_server = None
+        self.secure_grpc_server = secure_grpc_server
+        self.grpc_ssl_key = ssl_server_key
+        self.grpc_ssl_cert = ssl_server_cert
+        self.grpc_ssl_ca_cert = ssl_ca_cert
         if self.enable_grpc:
-            self._grpc_server = GRPCServer(
-                grpc_port,
-                self.dataplane,
-                self.model_repository_extension,
-                kwargs=vars(args),
-            )
+            if self.secure_grpc_server:
+                server_credentials = []
+                ssl_key = creds_utils.parse_grpc_server_credentials(self.grpc_ssl_key)
+                server_credentials.append(ssl_key)
+                ssl_cert = creds_utils.parse_grpc_server_credentials(self.grpc_ssl_cert)
+                server_credentials.append(ssl_cert)
+                ssl_ca_cert = creds_utils.parse_grpc_server_credentials(self.grpc_ssl_ca_cert)
+                server_credentials.append(ssl_ca_cert)
+                self._grpc_server = GRPCServer(
+                    grpc_port,
+                    self.dataplane,
+                    self.model_repository_extension,
+                    kwargs=vars(args),
+                    secure_server=self.secure_grpc_server,
+                    grpc_secure_server_credentials=server_credentials,
+                )
+            else:
+                self._grpc_server = GRPCServer(
+                    grpc_port,
+                    self.dataplane,
+                    self.model_repository_extension,
+                    kwargs=vars(args),
+                )
         if args.configure_logging:
             # If the logger does not have any handlers, then the logger is not configured.
             # For backward compatibility, we configure the logger here.
