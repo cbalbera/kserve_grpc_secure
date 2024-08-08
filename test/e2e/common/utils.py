@@ -39,19 +39,30 @@ TRANSFORMER_CONTAINER = "transformer-container"
 STORAGE_URI_ENV = "STORAGE_URI"
 
 
-def grpc_client(host):
+def grpc_client(host, ssl=False, ssl_creds=None):
     cluster_ip = get_cluster_ip()
     if ":" not in cluster_ip:
         cluster_ip = cluster_ip + ":80"
     logger.info("Cluster IP: %s", cluster_ip)
     logger.info("gRPC target host: %s", host)
-    return InferenceGRPCClient(
-        cluster_ip,
-        verbose=True,
-        channel_args=[
-            ("grpc.ssl_target_name_override", host),
-        ],
-    )
+    if not ssl:
+        return InferenceGRPCClient(
+            cluster_ip,
+            verbose=True,
+            channel_args=[
+                ("grpc.ssl_target_name_override", host),
+            ],
+        )
+    else:
+        return InferenceGRPCClient(
+            cluster_ip,
+            verbose=True,
+            use_ssl=True,
+            creds=ssl_creds,
+            channel_args=[
+                ("grpc.ssl_target_name_override", host),
+            ],
+        )
 
 
 async def predict_isvc(
@@ -244,6 +255,8 @@ async def predict_grpc(
     parameters=None,
     version=constants.KSERVE_V1BETA1_VERSION,
     model_name=None,
+    ssl=None,
+    ssl_creds=None
 ) -> InferResponse:
     kfs_client = KServeClient(
         config_file=os.environ.get("KUBECONFIG", "~/.kube/config")
@@ -257,7 +270,7 @@ async def predict_grpc(
 
     if model_name is None:
         model_name = service_name
-    client = grpc_client(host)
+    client = grpc_client(host, ssl=ssl, ssl_creds=ssl_creds)
 
     response = await client.infer(
         InferRequest.from_grpc(

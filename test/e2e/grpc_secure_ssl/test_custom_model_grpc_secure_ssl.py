@@ -23,58 +23,25 @@ from kserve import (
     V1beta1PredictorSpec,
     V1beta1TransformerSpec,
     constants,
-    InferInput, 
-    InferRequest,
-    InferenceGRPCClient
 )
 from kubernetes.client import V1ResourceRequirements
 from kubernetes import client
 from kubernetes.client import V1Container, V1ContainerPort
 from ..common.utils import KSERVE_TEST_NAMESPACE, predict_isvc, predict_grpc
-from typing import List
-import asyncio
 import grpc
-from os import path
-
-
-# gRPC client setup
-async def grpc_infer_request(integer: int, port: str, ssl: bool, creds: List, channel_args: any):
-    if ssl:
-        certs_path = path.join(path.dirname(__file__))
-        client_key = open(f"{certs_path}/client-key.pem", "rb").read()
-        client_cert = open(f"{certs_path}/client-cert.pem", "rb").read()
-        ca_cert = open(f"{certs_path}/ca-cert.pem", "rb").read()
-
-        creds = grpc.ssl_channel_credentials(
-            root_certificates=ca_cert, private_key=client_key, certificate_chain=client_cert
-        )
-        client = InferenceGRPCClient(url=port,
-                                     use_ssl=ssl,
-                                     creds=creds,
-                                     channel_args=[
-                                         # grpc.ssl_target_name_override must be set to match CN used in cert gen
-                                         ('grpc.ssl_target_name_override', 'localhost'),]
-                                     )
-    else:
-        client = InferenceGRPCClient(url=port)
-    data = float(integer)
-    infer_input = InferInput(name="input-0", shape=[1], datatype="FP32", data=[data])
-    request = InferRequest(infer_inputs=[infer_input], model_name="custom-model")
-    res = await client.infer(infer_request=request)
-    return res
-
 
 @pytest.mark.grpc
+@pytest.mark.predictor
 @pytest.mark.asyncio(scope="session")
-async def test_custom_model_grpc_secure_ssl():
-    service_name = "custom-model-grpc"
+async def test_custom_model_grpc():
+    service_name = "custom-model-grpc-secure"
     model_name = "custom-model"
 
     predictor = V1beta1PredictorSpec(
         containers=[
             V1Container(
                 name="kserve-container",
-                image="kserve/custom_model_secure_grpc:" + os.environ.get("GITHUB_SHA"),
+                image="kserve/custom-model-grpc-secure:" + os.environ.get("GITHUB_SHA"),
                 resources=V1ResourceRequirements(
                     requests={"cpu": "50m", "memory": "128Mi"},
                     limits={"cpu": "100m", "memory": "1Gi"},
@@ -102,7 +69,26 @@ async def test_custom_model_grpc_secure_ssl():
     kserve_client.create(isvc)
     kserve_client.wait_isvc_ready(service_name, namespace=KSERVE_TEST_NAMESPACE)
 
-    response = await grpc_infer_request(1, "localhost:8081", True, [], [])
+    certs_path = os.path.join(os.path.dirname(__file__), "kserve_test_certs")
+    client_key = open(f"{certs_path}/client-key.pem", 'rb').read()
+    client_cert = open(f"{certs_path}/client-cert.pem", "rb").read()
+    ca_cert = open(f"{certs_path}/ca-cert.pem", "rb").read()
+
+    creds = grpc.ssl_channel_credentials(
+        root_certificates=ca_cert, private_key=client_key, certificate_chain=client_cert
+    )
+
+    payload = [
+        {
+            "name": "input-0",
+            "shape": [1],
+            "datatype": "FP32",
+            "data": [1.0]
+        }
+    ]
+    response = await predict_grpc(
+        service_name=service_name, payload=payload, model_name=model_name, ssl=True, ssl_creds=creds
+    )
     number = response.outputs[0].data[0]
     assert number == 2.0
     kserve_client.delete(service_name, KSERVE_TEST_NAMESPACE)
