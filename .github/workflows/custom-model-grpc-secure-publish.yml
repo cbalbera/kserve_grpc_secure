@@ -1,4 +1,4 @@
-name: Custom model gRPC Docker Publisher
+name: Custom model gRPC secure Docker Publisher
 
 on:
   push:
