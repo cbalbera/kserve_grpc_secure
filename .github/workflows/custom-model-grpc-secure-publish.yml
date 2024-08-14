@@ -34,7 +34,7 @@ jobs:
         with:
           platforms: linux/amd64
           context: python
-          file: python/custom_model_grpc.Dockerfile
+          file: python/custom_model_grpc_secure.Dockerfile
           push: false
           # https://github.com/docker/buildx/issues/1533
           provenance: false
