@@ -74,7 +74,6 @@ async def test_custom_model_grpc():
     client_key = open(f"{certs_path}/client-key.pem", 'rb').read()
     client_cert = open(f"{certs_path}/client-cert.pem", "rb").read()
     ca_cert = open(f"{certs_path}/ca-cert.pem", "rb").read()
-
     creds = grpc.ssl_channel_credentials(
         root_certificates=ca_cert, private_key=client_key, certificate_chain=client_cert
     )
