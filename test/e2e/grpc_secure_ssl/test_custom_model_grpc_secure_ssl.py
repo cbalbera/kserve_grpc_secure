@@ -30,6 +30,7 @@ from kubernetes.client import V1Container, V1ContainerPort
 from ..common.utils import KSERVE_TEST_NAMESPACE, predict_isvc, predict_grpc
 import grpc
 
+
 @pytest.mark.grpc
 @pytest.mark.predictor
 @pytest.mark.asyncio(scope="session")
