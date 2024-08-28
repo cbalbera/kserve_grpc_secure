@@ -36,7 +36,7 @@ import grpc
 @pytest.mark.asyncio(scope="session")
 async def test_custom_model_grpc():
     service_name = "custom-model-grpc-secure"
-    model_name = "custom-model"
+    model_name = "custom-model-grpc-secure"
 
     predictor = V1beta1PredictorSpec(
         containers=[

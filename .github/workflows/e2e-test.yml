@@ -345,65 +345,6 @@ jobs:
         run: |
           ./test/scripts/gh-actions/status-check.sh
 
-  test-secure-grpc:
-    runs-on: ubuntu-latest
-    needs:
-      [kserve-image-build, predictor-runtime-build, explainer-runtime-build]
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Free-up disk space
-        uses: ./.github/actions/free-up-disk-space
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Setup Minikube
-        uses: ./.github/actions/minikube-setup
-
-      - name: KServe dependency setup
-        uses: ./.github/actions/kserve-dep-setup
-
-      - name: Download base images
-        uses: ./.github/actions/base-download
-
-      - name: Download custom grpc secure model grpc image
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.PREDICTOR_ARTIFACT_PREFIX }}-${{ env.CUSTOM_MODEL_GRPC_SECURE_IMG }}-${{ github.sha }}
-          path: ./tmp
-
-      - name: Load docker images
-        uses: ./.github/actions/load-docker-images
-        with:
-          directory: ./tmp
-
-      - name: Install Poetry and version plugin
-        run: ./test/scripts/gh-actions/setup-poetry.sh
-
-      - name: Install KServe
-        run: |
-          ./test/scripts/gh-actions/setup-kserve.sh
-          
-          kubectl get pods -n kserve
-          kubectl describe pods -n kserve
-
-      - name: Run E2E tests
-        timeout-minutes: 30
-        run: |
-          ./test/scripts/gh-actions/run-e2e-tests.sh "transformer or mms or collocation or explainer" "6"
-
-      - name: Check system status
-        if: always()
-        run: |
-          ./test/scripts/gh-actions/status-check.sh
 
   test-transformer-explainer-mms:
     runs-on: ubuntu-latest
@@ -451,6 +392,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.PREDICTOR_ARTIFACT_PREFIX }}-${{ env.CUSTOM_MODEL_GRPC_IMG }}-${{ github.sha }}
+          path: ./tmp
+
+      - name: Download custom grpc secure model grpc image
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PREDICTOR_ARTIFACT_PREFIX }}-${{ env.CUSTOM_MODEL_GRPC_SECURE_IMG }}-${{ github.sha }}
           path: ./tmp
 
       - name: Download xgb server image
@@ -809,6 +756,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.PREDICTOR_ARTIFACT_PREFIX }}-${{ env.CUSTOM_MODEL_GRPC_IMG }}-${{ github.sha }}
+          path: ./tmp
+
+      - name: Download custom grpc secure model grpc image
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PREDICTOR_ARTIFACT_PREFIX }}-${{ env.CUSTOM_MODEL_GRPC_SECURE_IMG }}-${{ github.sha }}
           path: ./tmp
 
       - name: Download transformer image
