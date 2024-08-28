@@ -283,4 +283,5 @@ def parse_grpc_server_credentials(server_credential):
         return server_credential
     else:
         raise RuntimeError(
-            "SSL key must be of type string (file path to cert) or bytes (raw cert).")
+            "SSL key must be of type string (file path to cert) or bytes (raw cert)."
+        )
