@@ -78,17 +78,24 @@ async def test_custom_model_grpc():
         root_certificates=ca_cert, private_key=client_key, certificate_chain=client_cert
     )
 
+    json_file = open("./data/custom_model_input.json")
+    data = json.load(json_file)
     payload = [
         {
             "name": "input-0",
-            "shape": [1],
-            "datatype": "FP32",
-            "data": [1.0]
+            "shape": [],
+            "datatype": "BYTES",
+            "contents": {
+                "bytes_contents": [
+                    base64.b64decode(data["instances"][0]["image"]["b64"])
+                ]
+            },
         }
     ]
     response = await predict_grpc(
         service_name=service_name, payload=payload, model_name=model_name, ssl=True, ssl_creds=creds
     )
-    number = response.outputs[0].data[0]
-    assert number == 2.0
+    fields = response.outputs[0].data
+    points = ["%.3f" % (point) for point in fields]
+    assert points == ["14.976", "14.037", "13.966", "12.252", "12.086"]
     kserve_client.delete(service_name, KSERVE_TEST_NAMESPACE)

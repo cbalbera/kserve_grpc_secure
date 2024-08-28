@@ -16,39 +16,85 @@ import argparse
 import io
 from typing import Dict
 
-from kserve import InferRequest, Model, ModelServer, logging, model_server, InferResponse, InferOutput
+import torch
+from kserve import InferRequest, Model, ModelServer, logging, model_server
 from kserve.utils.utils import generate_uuid
-from os import path
+from PIL import Image
+from torchvision import models, transforms
 
 
 # This custom predictor example implements the custom model following KServe v2 inference gPPC protocol,
 # the input can be raw image bytes or image tensor which is pre-processed by transformer
 # and then passed to predictor, the output is the prediction response.
-class TestModelForSecure(Model):  # Test model
+class AlexNetModel(Model):
     def __init__(self, name: str):
         super().__init__(name)
         self.name = name
-        self.ready = False
         self.load()
+        self.model = None
+        self.ready = False
 
     def load(self):
+        self.model = models.alexnet(pretrained=True, progress=False)
+        self.model.eval()
         self.ready = True
 
-    # Returns a number + 1
-    def predict(self, payload: InferRequest, headers: Dict[str, str] = None) -> InferResponse:
+    def preprocess(
+        self, payload: InferRequest, headers: Dict[str, str] = None
+    ) -> torch.Tensor:
         req = payload.inputs[0]
-        input_number = req.data[0]  # Input should be a single number
-        assert isinstance(input_number, (int, float)), "Data is not a number or float"
-        result = [float(input_number + 1)]
+        if req.datatype == "BYTES":
+            input_image = Image.open(io.BytesIO(req.data[0]))
+            preprocess = transforms.Compose(
+                [
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                    transforms.ToTensor(),
+                    transforms.Normalize(
+                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                    ),
+                ]
+            )
 
-        response_id = generate_uuid()
-        infer_output = InferOutput(name="output-0", shape=[1], datatype="FP32", data=result)
-        infer_response = InferResponse(model_name=self.name, infer_outputs=[infer_output], response_id=response_id)
-        return infer_response
+            input_tensor = preprocess(input_image)
+            return input_tensor.unsqueeze(0)
+        elif req.datatype == "FP32":
+            np_array = payload.inputs[0].as_numpy()
+            return torch.Tensor(np_array)
 
+    def predict(
+        self, input_tensor: torch.Tensor, headers: Dict[str, str] = None
+    ) -> Dict:
+        output = self.model(input_tensor)
+        torch.nn.functional.softmax(output, dim=1)
+        values, top_5 = torch.topk(output, 5)
+        result = values.flatten().tolist()
+        id = generate_uuid()
+        response = {
+            "id": id,
+            "model_name": "custom-model",
+            "outputs": [
+                {
+                    "contents": {
+                        "fp32_contents": result,
+                    },
+                    "datatype": "FP32",
+                    "name": "output-0",
+                    "shape": list(values.shape),
+                }
+            ],
+        }
+        return response
+
+
+parser = argparse.ArgumentParser(parents=[model_server.parser])
+args, _ = parser.parse_known_args()
 
 if __name__ == "__main__":
-    model = TestModelForSecure("custom-model")
+    if args.configure_logging:
+        logging.configure_logging(args.log_config_file)
+    model = AlexNetModel("custom-model")
+    model.load()
     certs_path = path.join(path.dirname(__file__), "kserve_test_certs")
     server_key = open(f"{certs_path}/server-key.pem", 'rb').read()
     server_cert = open(f"{certs_path}/server-cert.pem", 'rb').read()
