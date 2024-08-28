@@ -31,6 +31,7 @@ LGB_IMG_TAG=${DOCKER_REPO}/${LGB_IMG}:${GITHUB_SHA}
 PMML_IMG_TAG=${DOCKER_REPO}/${PMML_IMG}:${GITHUB_SHA}
 PADDLE_IMG_TAG=${DOCKER_REPO}/${PADDLE_IMG}:${GITHUB_SHA}
 CUSTOM_MODEL_GRPC_IMG_TAG=${DOCKER_REPO}/${CUSTOM_MODEL_GRPC_IMG}:${GITHUB_SHA}
+CUSTOM_MODEL_GRPC_SECURE_IMG_TAG=${DOCKER_REPO}/${CUSTOM_MODEL_GRPC_SECURE_IMG}:${GITHUB_SHA}
 CUSTOM_TRANSFORMER_GRPC_IMG_TAG=${DOCKER_REPO}/${CUSTOM_TRANSFORMER_GRPC_IMG}:${GITHUB_SHA}
 HUGGINGFACE_IMG_TAG=${DOCKER_REPO}/${HUGGINGFACE_IMG}:${GITHUB_SHA}
 # Explainer images
@@ -59,6 +60,9 @@ pushd python >/dev/null
     echo "Building Custom model gRPC image"
     docker buildx build -t "${CUSTOM_MODEL_GRPC_IMG_TAG}" -f custom_model_grpc.Dockerfile \
       -o type=docker,dest="${DOCKER_IMAGES_PATH}/${CUSTOM_MODEL_GRPC_IMG}-${GITHUB_SHA}",compression-level=0 .
+    echo "Building Custom model gRPC secure image"
+    docker buildx build -t "${CUSTOM_MODEL_GRPC_SECURE_IMG_TAG}" -f custom_model_grpc_secure.Dockerfile \
+      -o type=docker,dest="${DOCKER_IMAGES_PATH}/${CUSTOM_MODEL_GRPC_SECURE_IMG}-${GITHUB_SHA}",compression-level=0 .
     echo "Building image transformer gRPC image"
     docker buildx build -t "${CUSTOM_TRANSFORMER_GRPC_IMG_TAG}" -f custom_transformer_grpc.Dockerfile \
       -o type=docker,dest="${DOCKER_IMAGES_PATH}/${CUSTOM_TRANSFORMER_GRPC_IMG}-${GITHUB_SHA}",compression-level=0 .
